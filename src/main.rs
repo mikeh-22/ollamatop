@@ -1,10 +1,5 @@
-mod app;
-mod ollama;
-mod ui;
-mod model;
-
-use app::App;
-use ollama::OllamaClient;
+use ollamatop::app::App;
+use ollamatop::ollama::OllamaClient;
 use anyhow::Result;
 use crossterm::event::{Event, EventStream, KeyEventKind};
 use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
