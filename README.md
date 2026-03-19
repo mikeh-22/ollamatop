@@ -1,24 +1,24 @@
 # Ollama Top
 
-A terminal UI application to display Ollama model stats, including context window usage.
+A terminal UI for monitoring Ollama model statistics in real time.
 
 ## Features
 
-- Display Ollama model statistics
-- Visual gauge for context window usage
-- Real-time sparkline charts for token usage
-- Responsive table layout
-- Keyboard shortcuts for navigation
+- Live stats that refresh every 2 seconds
+- Context window usage gauge
+- Token history sparkline (last 20 refreshes)
+- Prompt / completion token breakdown
+- Navigate between all locally-installed models
 
 ## Prerequisites
 
-- Ollama must be installed and running
-- Rust toolchain
+- [Ollama](https://ollama.com) installed and running
+- Rust toolchain (stable)
 
 ## Installation
 
 ```bash
-git clone https://github.com/mikeh/ollamatop
+git clone https://github.com/mikeh-22/ollamatop
 cd ollamatop
 cargo install --path .
 ```
@@ -26,27 +26,64 @@ cargo install --path .
 ## Usage
 
 ```bash
+ollamatop
+```
+
+Or run directly without installing:
+
+```bash
 cargo run --release
 ```
 
-The application will connect to the Ollama API at `http://localhost:11434` and display the current model statistics.
+By default the app connects to `http://localhost:11434`. To use a different
+host set the `OLLAMA_HOST` environment variable:
 
-## Keyboard Shortcuts
+```bash
+OLLAMA_HOST=http://192.168.1.10:11434 ollamatop
+```
 
-- `q` - Quit the application
-- `r` - Refresh stats manually
+### UI layout
+
+```
+┌─────────────────────────────────────────────┐
+│           Ollama Top  (Ready)               │  header
+└─────────────────────────────────────────────┘
+  llama3.2:latest | 3B | q4_0 | Modified: …   model info
+  Context Usage ████████░░░░░░░  42.3%         gauge
+ ┌─────────────────────────────────────────────┐
+ │ Statistics                                  │
+ │ Response Time:  183.40 ms                   │
+ │ Completions:    7                           │
+ │ Total Tokens:   298                         │
+ │ Current Tokens: 298                         │
+ └─────────────────────────────────────────────┘
+  Token History  ▁▂▃▄▅▆▇█                     sparkline
+  Token Breakdown
+  Prompt:      26
+  Completion:  298
+```
+
+## Keyboard shortcuts
+
+| Key | Action |
+|-----|--------|
+| `↑` / `k` | Previous model |
+| `↓` / `j` | Next model |
+| `q` | Quit |
 
 ## Development
 
 ```bash
 cargo build
-cargo test
-cargo clippy
+cargo test --bin ollamatop
+cargo clippy -- -D warnings
 ```
 
 ## CI/CD
 
-The project includes GitHub Actions workflows for:
-- Testing and linting
-- Multi-platform builds (Linux, macOS, Windows)
-- Dependency caching
+GitHub Actions runs on every push and pull request:
+
+- Unit tests and Clippy lint on Linux, macOS, and Windows
+- Release builds uploaded as artifacts
+- Integration tests (requires a running Ollama instance)
+- `cargo audit` security scan

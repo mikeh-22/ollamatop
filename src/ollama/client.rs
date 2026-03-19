@@ -6,21 +6,20 @@ use std::time::Duration;
 /// Ollama API client for fetching model statistics
 pub struct OllamaClient {
     client: Client,
-    base_url: String,
+    base_url: String, // host only, e.g. "http://localhost:11434"
 }
 
 impl OllamaClient {
     /// Create a new Ollama client
     pub fn new() -> Result<Self> {
-        let host = std::env::var("OLLAMA_HOST").unwrap_or_else(|_| "http://localhost:11434".to_string());
-        let base_url = if host.ends_with("/api/tags") {
-            // If OLLAMA_HOST already includes /api/tags, strip it
-            host.rsplit_once("/api/tags")
-                .map(|(base, _)| base.to_string())
-                .unwrap_or(host)
-        } else {
-            format!("{}/api/tags", host)
-        };
+        let mut host = std::env::var("OLLAMA_HOST")
+            .unwrap_or_else(|_| "http://localhost:11434".to_string());
+
+        // Strip any trailing /api/... path that might have been included
+        if let Some(idx) = host.find("/api/") {
+            host.truncate(idx);
+        }
+        let base_url = host.trim_end_matches('/').to_string();
 
         let client = Client::builder()
             .timeout(Duration::from_secs(5))
@@ -32,9 +31,10 @@ impl OllamaClient {
 
     /// Get the list of available models
     pub async fn list_models(&self) -> Result<Vec<OllamaModel>> {
+        let url = format!("{}/api/tags", self.base_url);
         let response = self
             .client
-            .get(format!("{}/api/tags", self.base_url))
+            .get(&url)
             .send()
             .await
             .context("Failed to fetch models")?;
@@ -58,7 +58,10 @@ impl OllamaClient {
                 Some(OllamaModel {
                     name: model_data.get("name")?.as_str()?.to_string(),
                     parameters: model_data.get("parameters")?.as_u64()?,
-                    quantization: model_data.get("quantization")?.as_str().map(|s| s.to_string()),
+                    quantization: model_data
+                        .get("quantization")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string()),
                     size: model_data.get("size")?.as_f64()?,
                     modified_at: model_data.get("modified_at")?.as_str()?.to_string(),
                 })
@@ -68,17 +71,16 @@ impl OllamaClient {
         Ok(models)
     }
 
-    /// Get stats for a specific model by generating a response
+    /// Get stats for a specific model by running a minimal generate request
     pub async fn get_model_stats(&self, model_name: &str) -> Result<ModelStats> {
-        // Build the generate URL (base_url includes /api/tags)
-        let generate_url = self.base_url.replace("/api/tags", "/api/generate");
+        let url = format!("{}/api/generate", self.base_url);
 
         let response = self
             .client
-            .post(&generate_url)
+            .post(&url)
             .json(&serde_json::json!({
                 "model": model_name,
-                "prompt": "test",
+                "prompt": "hi",
                 "stream": false,
             }))
             .send()
@@ -106,19 +108,17 @@ impl OllamaClient {
                 .map(|d| d as f64 / 1_000_000.0),
             completion_count: 1,
             current_token_count: ollama_response.eval_count,
+            token_history: Vec::new(),
         };
 
         Ok(stats)
     }
 
     /// Ping the Ollama server to check if it's running
+    #[allow(dead_code)]
     pub async fn ping(&self) -> Result<bool> {
-        let response = self
-            .client
-            .get(&self.base_url)
-            .send()
-            .await?;
-
+        let url = format!("{}/api/tags", self.base_url);
+        let response = self.client.get(&url).send().await?;
         Ok(response.status().is_success())
     }
 }
