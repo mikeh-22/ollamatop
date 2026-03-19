@@ -26,7 +26,6 @@ impl std::fmt::Display for OllamaModel {
 pub struct Usage {
     /// Total tokens used
     pub total_tokens: u64,
-    /// Token usage per key
     #[serde(default)]
     pub prompt_tokens: Option<u64>,
     #[serde(default)]
@@ -43,50 +42,50 @@ impl Default for Usage {
     }
 }
 
-/// Represents response from Ollama API
+/// Represents response from Ollama /api/generate
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OllamaResponse {
-    /// The model that generated the response
     pub model: String,
-    /// The created timestamp
     pub created_at: String,
-    /// Message content (not used for stats)
-    pub message: Message,
-    /// Token usage statistics
+    /// Text response (from /api/generate)
+    #[serde(default)]
+    pub response: Option<String>,
+    /// Chat message (from /api/chat)
+    #[serde(default)]
+    pub message: Option<Message>,
     pub eval_count: u64,
     #[serde(default)]
     pub eval_duration: Option<u64>,
-    /// Usage details
     #[serde(default)]
     pub load_duration: Option<u64>,
     #[serde(default)]
     pub prompt_eval_count: Option<u64>,
     #[serde(default)]
     pub prompt_eval_duration: Option<u64>,
-    #[serde(default)]
-    pub token_count: Option<u64>,
 }
 
-/// Represents a message in Ollama response
+/// Represents a chat message in Ollama response
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Message {
     pub role: String,
     pub content: String,
 }
 
+/// Context window size assumed when the model doesn't report one
+pub const DEFAULT_CONTEXT_WINDOW: u64 = 4096;
+
 /// Represents the full stats for a model
 #[derive(Debug, Clone)]
 pub struct ModelStats {
-    /// Model name
     pub name: String,
-    /// Usage statistics
     pub usage: Usage,
-    /// Response metrics
     pub response_time_ms: Option<f64>,
-    /// Number of completions generated
+    /// Cumulative number of stat refreshes for this model
     pub completion_count: u64,
-    /// Current token count
+    /// Token count from the most recent response
     pub current_token_count: u64,
+    /// Rolling history of token counts (newest last, capped at 20)
+    pub token_history: Vec<u64>,
 }
 
 impl ModelStats {
@@ -95,8 +94,7 @@ impl ModelStats {
         if self.current_token_count == 0 {
             return 0.0;
         }
-        let total = 4096.0; // Default context window size
-        (self.current_token_count as f64 / total) * 100.0
+        (self.current_token_count as f64 / DEFAULT_CONTEXT_WINDOW as f64) * 100.0
     }
 }
 
@@ -112,10 +110,10 @@ mod tests {
             response_time_ms: None,
             completion_count: 0,
             current_token_count: 1024,
+            token_history: Vec::new(),
         };
 
-        let percent = stats.context_usage_percent();
-        assert_eq!(percent, 25.0);
+        assert_eq!(stats.context_usage_percent(), 25.0);
     }
 
     #[test]
@@ -126,9 +124,9 @@ mod tests {
             response_time_ms: None,
             completion_count: 0,
             current_token_count: 0,
+            token_history: Vec::new(),
         };
 
-        let percent = stats.context_usage_percent();
-        assert_eq!(percent, 0.0);
+        assert_eq!(stats.context_usage_percent(), 0.0);
     }
 }
